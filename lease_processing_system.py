@@ -2,15 +2,12 @@ import modal
 import os
 from typing import Dict, List, Optional
 import json
-import requests
 from datetime import datetime
-import torch
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 # Create Modal app
 app = modal.App("lease-hunyuan-system")
 
-# Define image with Hunyuan dependencies
+# Define image with all dependencies
 image = modal.Image.debian_slim().pip_install([
     "pinecone-client>=3.0.0", 
     "sentence-transformers>=2.2.2",
@@ -49,6 +46,9 @@ hunyuan_tokenizer = None
 )
 def load_hunyuan_model():
     """Load Hunyuan-MT-7B model ONCE"""
+    import torch
+    from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+    
     global hunyuan_model, hunyuan_tokenizer
     
     if hunyuan_model is None:
@@ -78,6 +78,7 @@ def load_hunyuan_model():
 @app.function(image=image, secrets=secrets, gpu="A10G", timeout=600)
 def translate_text_hunyuan(text: str) -> Dict:
     """Translate using Hunyuan-MT-7B - NO FALLBACKS"""
+    import torch
     from langdetect import detect, DetectorFactory
     
     DetectorFactory.seed = 0
@@ -158,6 +159,8 @@ def translate_text_hunyuan(text: str) -> Dict:
 @app.function(image=image, secrets=secrets, gpu="A10G", timeout=600)
 def extract_lease_info_hunyuan(text_with_pages: List[Dict]) -> Dict:
     """Extract lease info using Hunyuan - NO FALLBACKS"""
+    import torch
+    import json
     
     # Load Hunyuan model
     model, tokenizer = load_hunyuan_model.remote()
@@ -222,12 +225,14 @@ JSON:"""
     
     if json_start != -1 and json_end != -1:
         json_text = response_text[json_start:json_end]
-        extracted_info = json.loads(json_text)
+        try:
+            extracted_info = json.loads(json_text)
+        except:
+            extracted_info = {"error": "Failed to parse JSON"}
         extracted_info["page_map"] = page_map
         extracted_info["total_pages"] = len(text_with_pages)
         return extracted_info
     else:
-        # If JSON extraction fails, return minimal structure
         return {
             "error": "Failed to extract structured information",
             "page_map": page_map,
@@ -265,6 +270,7 @@ def create_embeddings(text_with_pages: List[Dict]) -> Dict:
 def store_in_pinecone(document_id: str, embeddings_data: Dict, metadata: Dict) -> Dict:
     """Store in Pinecone"""
     from pinecone import Pinecone
+    import json
     
     pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
     index = pc.Index("lease-documents")
