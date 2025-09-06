@@ -1,4 +1,4 @@
-name: Deploy to Modal with Hunyuan
+name: Deploy to Modal
 
 on:
   push:
@@ -18,12 +18,10 @@ jobs:
         python-version: '3.11'
     
     - name: Install Modal
-      run: |
-        pip install modal
+      run: pip install modal
     
     - name: Deploy to Modal
       env:
         MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
         MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-      run: |
-        modal deploy lease_processing_system.py
+      run: modal deploy lease_processing_system.py
